@@ -8,12 +8,24 @@ const saveButton = document.getElementById("save-session");
 const sessionNameInput = document.getElementById("session-name");
 const saveError = document.getElementById("save-error");
 const libraryList = document.getElementById("library-list");
+const timerStartButton = document.getElementById("timer-start");
+const timerStopButton = document.getElementById("timer-stop");
+const exportJsonButton = document.getElementById("export-json");
+const exportCsvButton = document.getElementById("export-csv");
+const timerSummary = document.getElementById("timer-summary");
+const timerLogList = document.getElementById("timer-log-list");
+const interruptSelect = document.getElementById("interrupt-type");
+const interruptButton = document.getElementById("log-interrupt");
 
 const STORAGE_KEY = "tabataSessions";
+const TIMER_EXPECTED_INTERVAL_MS = 1000;
 
 const toNumber = (value) => Number.parseFloat(value || 0);
 
 const formatDuration = (minutes) => `${minutes.toFixed(1)} min`;
+const formatTimestamp = (timestamp) =>
+  new Date(timestamp).toLocaleTimeString("fr-FR", { hour12: false });
+const formatMs = (value) => `${value.toFixed(1)} ms`;
 
 const createBlock = () => {
   const fragment = blockTemplate.content.cloneNode(true);
@@ -157,17 +169,199 @@ const saveSession = () => {
   loadLibrary();
 };
 
+const timerState = {
+  timerId: null,
+  startTime: null,
+  lastTick: null,
+  driftMs: 0,
+  tickCount: 0,
+  sumDelta: 0,
+};
+
+const timerMetrics = [];
+
+const updateTimerSummary = () => {
+  if (!timerSummary) {
+    return;
+  }
+  const averageDelta =
+    timerState.tickCount > 0 ? timerState.sumDelta / timerState.tickCount : 0;
+  const lastEntry = timerMetrics[timerMetrics.length - 1];
+  const lastState =
+    lastEntry && (lastEntry.type === "state" || lastEntry.type === "interrupt")
+      ? lastEntry.label
+      : "Aucun";
+  timerSummary.textContent = `Ticks: ${timerState.tickCount} · Delta moyen: ${formatMs(
+    averageDelta
+  )} · Drift cumulé: ${formatMs(timerState.driftMs)} · Dernier état: ${lastState}`;
+};
+
+const setExportEnabled = () => {
+  const hasMetrics = timerMetrics.length > 0;
+  exportJsonButton.disabled = !hasMetrics;
+  exportCsvButton.disabled = !hasMetrics;
+};
+
+const appendLogEntry = (entry) => {
+  if (!timerLogList) {
+    return;
+  }
+  const item = document.createElement("li");
+  item.textContent = entry.message;
+  timerLogList.prepend(item);
+};
+
+const logMetric = (entry) => {
+  timerMetrics.push(entry);
+  appendLogEntry(entry);
+  updateTimerSummary();
+  setExportEnabled();
+};
+
+const logStateChange = (state) => {
+  const timestamp = Date.now();
+  logMetric({
+    type: "state",
+    timestamp,
+    label: state,
+    message: `[${formatTimestamp(timestamp)}] État: ${state}`,
+  });
+};
+
+const logInterrupt = (kind) => {
+  const timestamp = Date.now();
+  logMetric({
+    type: "interrupt",
+    timestamp,
+    label: kind,
+    message: `[${formatTimestamp(timestamp)}] Interruption: ${kind}`,
+  });
+};
+
+const logTick = (deltaMs, driftMs) => {
+  const timestamp = Date.now();
+  logMetric({
+    type: "tick",
+    timestamp,
+    deltaMs,
+    driftMs,
+    message: `[${formatTimestamp(timestamp)}] Tick: Δ ${formatMs(
+      deltaMs
+    )} · Drift cumulé ${formatMs(driftMs)}`,
+  });
+};
+
+const startTimer = () => {
+  if (timerState.timerId) {
+    return;
+  }
+  timerState.startTime = performance.now();
+  timerState.lastTick = timerState.startTime;
+  timerState.driftMs = 0;
+  timerState.tickCount = 0;
+  timerState.sumDelta = 0;
+  logStateChange("timer démarré");
+  timerState.timerId = window.setInterval(() => {
+    const now = performance.now();
+    const deltaMs = now - timerState.lastTick;
+    timerState.lastTick = now;
+    timerState.tickCount += 1;
+    timerState.sumDelta += deltaMs;
+    timerState.driftMs += deltaMs - TIMER_EXPECTED_INTERVAL_MS;
+    logTick(deltaMs, timerState.driftMs);
+  }, TIMER_EXPECTED_INTERVAL_MS);
+  timerStartButton.disabled = true;
+  timerStopButton.disabled = false;
+};
+
+const stopTimer = () => {
+  if (!timerState.timerId) {
+    return;
+  }
+  window.clearInterval(timerState.timerId);
+  timerState.timerId = null;
+  logStateChange("timer arrêté");
+  timerStartButton.disabled = false;
+  timerStopButton.disabled = true;
+};
+
+const buildCsv = () => {
+  const header = [
+    "type",
+    "timestamp",
+    "iso_time",
+    "delta_ms",
+    "drift_ms",
+    "label",
+  ];
+  const rows = timerMetrics.map((entry) => [
+    entry.type,
+    entry.timestamp,
+    new Date(entry.timestamp).toISOString(),
+    entry.deltaMs ?? "",
+    entry.driftMs ?? "",
+    entry.label ?? "",
+  ]);
+  return [header, ...rows].map((row) => row.join(",")).join("\n");
+};
+
+const downloadFile = (filename, content, mimeType) => {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+const exportJson = () => {
+  const payload = {
+    generatedAt: new Date().toISOString(),
+    expectedIntervalMs: TIMER_EXPECTED_INTERVAL_MS,
+    metrics: timerMetrics,
+  };
+  downloadFile(
+    "timer-metrics.json",
+    JSON.stringify(payload, null, 2),
+    "application/json"
+  );
+};
+
+const exportCsv = () => {
+  downloadFile("timer-metrics.csv", buildCsv(), "text/csv");
+};
+
 addBlockButton.addEventListener("click", () => {
   createBlock();
   updateTotals();
 });
 
 saveButton.addEventListener("click", saveSession);
+timerStartButton.addEventListener("click", startTimer);
+timerStopButton.addEventListener("click", stopTimer);
+exportJsonButton.addEventListener("click", exportJson);
+exportCsvButton.addEventListener("click", exportCsv);
+interruptButton.addEventListener("click", () => {
+  logInterrupt(interruptSelect.value);
+});
 
 warmupInput.addEventListener("input", updateTotals);
 cooldownInput.addEventListener("input", updateTotals);
+
+document.addEventListener("visibilitychange", () => {
+  const state =
+    document.visibilityState === "hidden"
+      ? "passage en background"
+      : "retour en foreground";
+  logStateChange(state);
+});
 
 createBlock();
 createBlock();
 updateTotals();
 loadLibrary();
+updateTimerSummary();
+setExportEnabled();
