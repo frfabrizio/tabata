@@ -75,6 +75,41 @@
       </div>
       <div class="library" id="library-list"></div>
     </section>
+
+    <section class="panel" aria-labelledby="timer-instrumentation-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="timer-instrumentation-title">Instrumentation du timer</h2>
+          <p>Suivi des ticks, transitions background/foreground et interruptions.</p>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="timer-actions">
+          <button type="button" id="timer-start" class="primary">Démarrer le timer</button>
+          <button type="button" id="timer-stop" class="secondary" disabled>Arrêter</button>
+        </div>
+        <div class="timer-actions">
+          <button type="button" id="export-json" class="secondary" disabled>Exporter JSON</button>
+          <button type="button" id="export-csv" class="secondary" disabled>Exporter CSV</button>
+        </div>
+      </div>
+      <div class="form-grid">
+        <label>
+          Interruption à consigner
+          <select id="interrupt-type">
+            <option value="appel">Appel entrant</option>
+            <option value="audio">Audio concurrent</option>
+            <option value="verrouillage">Verrouillage écran</option>
+          </select>
+        </label>
+        <button type="button" id="log-interrupt" class="ghost">Ajouter interruption</button>
+      </div>
+      <div class="timer-summary" id="timer-summary"></div>
+      <div class="timer-logs">
+        <h3>Logs</h3>
+        <ul id="timer-log-list"></ul>
+      </div>
+    </section>
   </main>
 
   <template id="block-template">
