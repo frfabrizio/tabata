@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Éditeur de séance Tabata</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <div>
+        <p class="eyebrow">Édition de séance</p>
+        <h1>Créer une séance Tabata</h1>
+      </div>
+      <div class="total-duration" aria-live="polite">
+        <span>Durée totale</span>
+        <strong id="total-duration">0 min</strong>
+      </div>
+    </header>
+
+    <section class="panel" aria-labelledby="warmup-title">
+      <div class="panel-header">
+        <h2 id="warmup-title">Échauffement</h2>
+        <p>Renseignez la durée avant l'entraînement.</p>
+      </div>
+      <div class="form-grid">
+        <label>
+          Durée (min)
+          <input type="number" min="1" value="5" id="warmup-duration" />
+          <span class="error" data-error-for="warmup-duration"></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="blocks-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="blocks-title">Blocs</h2>
+          <p>Sélectionnez un bloc, son nombre de répétitions et ajustez l'intervalle.</p>
+        </div>
+        <button type="button" class="secondary" id="add-block">+ Ajouter un bloc</button>
+      </div>
+      <div class="blocks" id="blocks-container"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="cooldown-title">
+      <div class="panel-header">
+        <h2 id="cooldown-title">Récupération</h2>
+        <p>Durée de retour au calme.</p>
+      </div>
+      <div class="form-grid">
+        <label>
+          Durée (min)
+          <input type="number" min="1" value="5" id="cooldown-duration" />
+          <span class="error" data-error-for="cooldown-duration"></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="library-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="library-title">Bibliothèque</h2>
+          <p>Enregistrez la séance pour la retrouver plus tard.</p>
+        </div>
+      </div>
+      <div class="form-grid">
+        <label>
+          Nom de la séance
+          <input type="text" id="session-name" placeholder="Ex : Tabata explosif" />
+        </label>
+        <button type="button" id="save-session" class="primary">Enregistrer la séance</button>
+        <span class="error" id="save-error"></span>
+      </div>
+      <div class="library" id="library-list"></div>
+    </section>
+  </main>
+
+  <template id="block-template">
+    <div class="block-card">
+      <div class="block-header">
+        <h3>Bloc</h3>
+        <button type="button" class="ghost" data-action="remove">Supprimer</button>
+      </div>
+      <div class="block-grid">
+        <label>
+          Sélection
+          <select data-field="type">
+            <option value="Vitesse">Vitesse</option>
+            <option value="Puissance">Puissance</option>
+            <option value="Endurance">Endurance</option>
+            <option value="Technique">Technique</option>
+          </select>
+        </label>
+        <label>
+          Répétitions
+          <input type="number" min="1" value="4" data-field="reps" />
+          <span class="error" data-error-field="reps"></span>
+        </label>
+        <label>
+          Intervalle (min)
+          <input type="number" min="1" value="1" data-field="interval" />
+          <span class="error" data-error-field="interval"></span>
+        </label>
+        <label>
+          Ajustement d'intervalle (min)
+          <input type="number" min="0" value="0" data-field="adjustment" />
+        </label>
+      </div>
+      <div class="block-summary" data-summary></div>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
