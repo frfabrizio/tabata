@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  lint_test_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        if: ${{ hashFiles('package.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            npm-shrinkwrap.json
+            yarn.lock
+            pnpm-lock.yaml
+
+      - name: Install Node dependencies
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm ci
+
+      - name: Setup Flutter
+        if: ${{ hashFiles('pubspec.yaml') != '' }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: stable
+          cache: true
+
+      - name: Flutter dependencies
+        if: ${{ hashFiles('pubspec.yaml') != '' }}
+        run: flutter pub get
+
+      - name: Lint/format (Node)
+        if: ${{ hashFiles('package.json') != '' }}
+        run: |
+          npm run lint --if-present
+          npm run format --if-present
+
+      - name: Lint/format (Flutter)
+        if: ${{ hashFiles('pubspec.yaml') != '' }}
+        run: |
+          flutter format --set-exit-if-changed .
+          flutter analyze
+
+      - name: Unit tests (Node)
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm test --if-present
+
+      - name: Unit tests (Flutter)
+        if: ${{ hashFiles('pubspec.yaml') != '' }}
+        run: flutter test
+
+      - name: Build (Node)
+        if: ${{ hashFiles('package.json') != '' }}
+        run: npm run build --if-present
+
+      - name: Build (Flutter)
+        if: ${{ hashFiles('pubspec.yaml') != '' }}
+        run: flutter build web --release
