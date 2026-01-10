@@ -1,0 +1,17 @@
+name: mobile_background_poc
+version: 0.1.0
+publish_to: "none"
+
+description: POC Flutter pour lecture audio en background + timer longue durée.
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  audio_service: ^0.18.12
+  just_audio: ^0.9.36
+
+flutter:
+  uses-material-design: true
