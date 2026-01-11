@@ -30,9 +30,123 @@ const sessionTotalRemaining = document.getElementById("session-total-remaining")
 const sessionTimeline = document.getElementById("session-timeline");
 const sessionStatus = document.getElementById("session-status");
 const sessionProgressFill = document.getElementById("session-progress-fill");
+const exerciseCategorySelect = document.getElementById("exercise-category");
+const exerciseNameInput = document.getElementById("exercise-name");
+const exerciseError = document.getElementById("exercise-error");
+const addExerciseButton = document.getElementById("add-exercise");
+const exerciseList = document.getElementById("exercise-list");
 
 const STORAGE_KEY = "tabataSessions";
+const EXERCISE_STORAGE_KEY = "tabataExercises";
 const TIMER_EXPECTED_INTERVAL_MS = 1000;
+
+const DEFAULT_EXERCISE_CATEGORIES = [
+  {
+    category: "Abdominaux",
+    exercises: [
+      "Sit-up",
+      "Crunch classique",
+      "Crunch oblique",
+      "Relevés de jambes au sol",
+      "Relevés de jambes suspendu",
+      "Bicycle crunch",
+      "V-up",
+      "Toe touches",
+      "Russian twist",
+      "Mountain climbers",
+    ],
+  },
+  {
+    category: "🟩 Gainage (stabilité du tronc)",
+    exercises: [
+      "Planche classique",
+      "Gainage latéral",
+      "Gainage militaire (planche dynamique)",
+      "Planche avec élévation de bras",
+      "Planche avec élévation de jambe",
+      "Planche sur ballon",
+      "Hollow body hold",
+      "Dead bug",
+      "Bear plank",
+      "Planche avec rotation",
+    ],
+  },
+  {
+    category: "🟥 Jambes & fessiers",
+    exercises: [
+      "Squat",
+      "Squat sauté",
+      "Fentes avant",
+      "Fentes arrière",
+      "Fentes marchées",
+      "Bulgarian split squat",
+      "Chaise contre un mur",
+      "Hip thrust",
+      "Pont fessier",
+      "Step-up (montée sur banc)",
+    ],
+  },
+  {
+    category: "🟨 Haut du corps – Pectoraux / Bras / Épaules",
+    exercises: [
+      "Pompes classiques",
+      "Pompes diamant",
+      "Pompes larges",
+      "Dips sur chaise",
+      "Dips entre deux bancs",
+      "Pompes inclinées",
+      "Pompes déclinées",
+      "Pike push-up",
+      "Développé militaire (avec haltères)",
+      "Élévations latérales",
+    ],
+  },
+  {
+    category: "🟪 Dos",
+    exercises: [
+      "Tractions pronation",
+      "Tractions supination",
+      "Rowing avec haltères",
+      "Rowing inversé",
+      "Superman",
+      "Y-T-W au sol",
+      "Tirage élastique",
+      "Face pull avec élastique",
+      "Good morning",
+      "Bird-dog",
+    ],
+  },
+  {
+    category: "🟧 Cardio / explosivité",
+    exercises: [
+      "Burpees",
+      "Jumping jacks",
+      "High knees",
+      "Skipping",
+      "Corde à sauter",
+      "Sprint sur place",
+      "Box jumps",
+      "Squat jumps",
+      "Skaters",
+      "Mountain climbers rapides",
+    ],
+  },
+  {
+    category: "🟫 Mobilité / étirements actifs",
+    exercises: [
+      "Étirement des ischio-jambiers",
+      "Étirement des fléchisseurs de hanche",
+      "Rotation thoracique",
+      "Ouverture des hanches (90/90)",
+      "Étirement du dos (child pose)",
+      "Mobilité des épaules avec bâton",
+      "Chat / vache",
+      "Deep squat hold",
+      "Cercles de chevilles",
+      "Pont dorsal léger",
+    ],
+  },
+];
 
 const toNumber = (value) => Number.parseFloat(value || 0);
 
@@ -46,6 +160,126 @@ const formatClock = (seconds) => {
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 };
 
+const buildDefaultExercises = () =>
+  DEFAULT_EXERCISE_CATEGORIES.flatMap((group) =>
+    group.exercises.map((name) => ({
+      name,
+      category: group.category,
+    }))
+  );
+
+const saveExercises = (exercises) => {
+  localStorage.setItem(EXERCISE_STORAGE_KEY, JSON.stringify(exercises));
+};
+
+const getExercises = () => {
+  const stored = localStorage.getItem(EXERCISE_STORAGE_KEY);
+  if (!stored) {
+    const defaults = buildDefaultExercises();
+    saveExercises(defaults);
+    return defaults;
+  }
+  try {
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) {
+      throw new Error("Format invalide.");
+    }
+    return parsed;
+  } catch (error) {
+    const defaults = buildDefaultExercises();
+    saveExercises(defaults);
+    return defaults;
+  }
+};
+
+const groupExercisesByCategory = (exercises) => {
+  return exercises.reduce((acc, exercise) => {
+    if (!acc[exercise.category]) {
+      acc[exercise.category] = [];
+    }
+    acc[exercise.category].push(exercise);
+    return acc;
+  }, {});
+};
+
+const renderExerciseCategoryOptions = () => {
+  if (!exerciseCategorySelect) {
+    return;
+  }
+  exerciseCategorySelect.innerHTML = DEFAULT_EXERCISE_CATEGORIES.map(
+    (group) => `<option value="${group.category}">${group.category}</option>`
+  ).join("");
+};
+
+const renderExerciseOptions = (select, exercises, selectedValue) => {
+  const grouped = groupExercisesByCategory(exercises);
+  select.innerHTML = "";
+  Object.entries(grouped).forEach(([category, items]) => {
+    const group = document.createElement("optgroup");
+    group.label = category;
+    items
+      .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+      .forEach((exercise) => {
+        const option = document.createElement("option");
+        option.value = exercise.name;
+        option.textContent = exercise.name;
+        group.appendChild(option);
+      });
+    select.appendChild(group);
+  });
+  if (selectedValue) {
+    select.value = selectedValue;
+  }
+};
+
+const refreshExerciseSelects = () => {
+  const exercises = getExercises();
+  document.querySelectorAll("[data-field='type']").forEach((select) => {
+    const selectedValue = select.value;
+    renderExerciseOptions(select, exercises, selectedValue);
+  });
+};
+
+const renderExerciseLibrary = () => {
+  if (!exerciseList) {
+    return;
+  }
+  const exercises = getExercises();
+  const grouped = groupExercisesByCategory(exercises);
+  exerciseList.innerHTML = "";
+  Object.entries(grouped).forEach(([category, items]) => {
+    const card = document.createElement("div");
+    card.className = "exercise-card";
+    card.innerHTML = `
+      <h3>${category}</h3>
+      <ul></ul>
+    `;
+    const list = card.querySelector("ul");
+    items
+      .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+      .forEach((exercise) => {
+        const item = document.createElement("li");
+        item.innerHTML = `
+          <span>${exercise.name}</span>
+          <button type="button" class="ghost" data-action="delete">Supprimer</button>
+        `;
+        item.querySelector("[data-action='delete']").addEventListener("click", () => {
+          const remaining = exercises.filter(
+            (entry) =>
+              !(
+                entry.name === exercise.name && entry.category === exercise.category
+              )
+          );
+          saveExercises(remaining);
+          renderExerciseLibrary();
+          refreshExerciseSelects();
+        });
+        list.appendChild(item);
+      });
+    exerciseList.appendChild(card);
+  });
+};
+
 const createBlock = (data = {}) => {
   const fragment = blockTemplate.content.cloneNode(true);
   const block = fragment.querySelector(".block-card");
@@ -57,7 +291,7 @@ const createBlock = (data = {}) => {
   const intervalInput = block.querySelector("[data-field='interval']");
   const adjustmentInput = block.querySelector("[data-field='adjustment']");
 
-  typeInput.value = data.type ?? typeInput.value;
+  renderExerciseOptions(typeInput, getExercises(), data.type ?? typeInput.value);
   repsInput.value = data.reps ?? repsInput.value;
   intervalInput.value = data.interval ?? intervalInput.value;
   adjustmentInput.value = data.adjustment ?? adjustmentInput.value;
@@ -719,6 +953,33 @@ interruptButton.addEventListener("click", () => {
   logInterrupt(interruptSelect.value);
 });
 
+if (addExerciseButton) {
+  addExerciseButton.addEventListener("click", () => {
+    const name = exerciseNameInput.value.trim();
+    const category = exerciseCategorySelect.value;
+    if (!name) {
+      exerciseError.textContent = "Veuillez saisir un nom d'exercice.";
+      return;
+    }
+    exerciseError.textContent = "";
+    const exercises = getExercises();
+    const alreadyExists = exercises.some(
+      (exercise) =>
+        exercise.name.toLowerCase() === name.toLowerCase() &&
+        exercise.category === category
+    );
+    if (alreadyExists) {
+      exerciseError.textContent = "Cet exercice existe déjà dans la catégorie.";
+      return;
+    }
+    exercises.push({ name, category });
+    saveExercises(exercises);
+    exerciseNameInput.value = "";
+    renderExerciseLibrary();
+    refreshExerciseSelects();
+  });
+}
+
 warmupInput.addEventListener("input", updateTotals);
 cooldownInput.addEventListener("input", updateTotals);
 
@@ -734,6 +995,9 @@ createBlock();
 createBlock();
 updateTotals();
 loadLibrary();
+renderExerciseCategoryOptions();
+renderExerciseLibrary();
+refreshExerciseSelects();
 updateTimerSummary();
 setExportEnabled();
 
