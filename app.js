@@ -20,6 +20,16 @@ const homeCreateButton = document.getElementById("home-create-session");
 const homeLoadButton = document.getElementById("home-load-session");
 const warmupSection = document.querySelector("[aria-labelledby='warmup-title']");
 const librarySection = document.querySelector("[aria-labelledby='library-title']");
+const sessionStartButton = document.getElementById("session-start");
+const sessionPauseButton = document.getElementById("session-pause");
+const sessionResetButton = document.getElementById("session-reset");
+const sessionCurrent = document.getElementById("session-current");
+const sessionNext = document.getElementById("session-next");
+const sessionRemaining = document.getElementById("session-remaining");
+const sessionTotalRemaining = document.getElementById("session-total-remaining");
+const sessionTimeline = document.getElementById("session-timeline");
+const sessionStatus = document.getElementById("session-status");
+const sessionProgressFill = document.getElementById("session-progress-fill");
 
 const STORAGE_KEY = "tabataSessions";
 const TIMER_EXPECTED_INTERVAL_MS = 1000;
@@ -30,6 +40,11 @@ const formatDuration = (minutes) => `${minutes.toFixed(1)} min`;
 const formatTimestamp = (timestamp) =>
   new Date(timestamp).toLocaleTimeString("fr-FR", { hour12: false });
 const formatMs = (value) => `${value.toFixed(1)} ms`;
+const formatClock = (seconds) => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+};
 
 const createBlock = (data = {}) => {
   const fragment = blockTemplate.content.cloneNode(true);
@@ -137,6 +152,7 @@ const updateTotals = () => {
   totalDurationEl.textContent = formatDuration(total);
 
   saveButton.disabled = !isValid || blocks.length === 0;
+  updateSessionPreview(isValid);
 };
 
 const saveSessions = (sessions) => {
@@ -267,6 +283,238 @@ const saveSession = () => {
   saveSessions(sessions.slice(0, 8));
   sessionNameInput.value = "";
   loadLibrary();
+};
+
+const sessionState = {
+  timeline: [],
+  currentIndex: -1,
+  phaseRemainingSeconds: 0,
+  totalDurationSeconds: 0,
+  phaseStartMs: null,
+  timerId: null,
+  isRunning: false,
+  isPaused: false,
+};
+
+const buildTimeline = () => {
+  const timeline = [];
+  const warmupMinutes = toNumber(warmupInput.value);
+  const cooldownMinutes = toNumber(cooldownInput.value);
+  if (warmupMinutes > 0) {
+    timeline.push({
+      label: "Échauffement",
+      durationSeconds: Math.round(warmupMinutes * 60),
+    });
+  }
+  getBlocksData().forEach((block) => {
+    const intervalTotal = Math.max(block.interval + block.adjustment, 0);
+    for (let i = 1; i <= block.reps; i += 1) {
+      timeline.push({
+        label: `${block.type} · rep ${i}/${block.reps}`,
+        durationSeconds: Math.round(intervalTotal * 60),
+      });
+    }
+  });
+  if (cooldownMinutes > 0) {
+    timeline.push({
+      label: "Récupération",
+      durationSeconds: Math.round(cooldownMinutes * 60),
+    });
+  }
+  return timeline.filter((item) => item.durationSeconds > 0);
+};
+
+const totalDurationSeconds = (timeline) =>
+  timeline.reduce((sum, item) => sum + item.durationSeconds, 0);
+
+const renderTimeline = (timeline) => {
+  if (!sessionTimeline) {
+    return;
+  }
+  sessionTimeline.innerHTML = "";
+  if (!timeline.length) {
+    const emptyItem = document.createElement("li");
+    emptyItem.className = "muted";
+    emptyItem.textContent = "Aucune phase disponible.";
+    sessionTimeline.appendChild(emptyItem);
+    return;
+  }
+  timeline.forEach((item, index) => {
+    const listItem = document.createElement("li");
+    listItem.dataset.index = `${index}`;
+    listItem.innerHTML = `
+      <span>${item.label}</span>
+      <span>${formatClock(item.durationSeconds)}</span>
+    `;
+    sessionTimeline.appendChild(listItem);
+  });
+};
+
+const updateTimelineHighlight = () => {
+  if (!sessionTimeline) {
+    return;
+  }
+  const items = sessionTimeline.querySelectorAll("li");
+  items.forEach((item) => {
+    const index = Number(item.dataset.index);
+    item.classList.toggle("active", index === sessionState.currentIndex);
+  });
+};
+
+const updateSessionControls = (isValid) => {
+  if (!sessionStartButton) {
+    return;
+  }
+  const hasTimeline = sessionState.timeline.length > 0;
+  sessionStartButton.disabled = !isValid || !hasTimeline || sessionState.isRunning;
+  sessionPauseButton.disabled = !sessionState.isRunning;
+  sessionResetButton.disabled = !hasTimeline;
+};
+
+const updateSessionDisplay = (remainingSeconds = 0) => {
+  if (!sessionCurrent) {
+    return;
+  }
+  const currentItem =
+    sessionState.currentIndex >= 0
+      ? sessionState.timeline[sessionState.currentIndex]
+      : null;
+  const nextItem =
+    sessionState.currentIndex >= 0
+      ? sessionState.timeline[sessionState.currentIndex + 1]
+      : sessionState.timeline[0];
+  const totalRemaining =
+    sessionState.currentIndex < 0
+      ? Math.ceil(remainingSeconds)
+      : sessionState.timeline
+          .slice(sessionState.currentIndex + 1)
+          .reduce(
+            (sum, item) => sum + item.durationSeconds,
+            Math.ceil(remainingSeconds)
+          );
+  sessionCurrent.textContent = currentItem ? currentItem.label : "Prêt";
+  sessionNext.textContent = nextItem ? nextItem.label : "—";
+  sessionRemaining.textContent = formatClock(remainingSeconds);
+  sessionTotalRemaining.textContent = formatClock(
+    Math.max(totalRemaining, 0)
+  );
+  const completed =
+    sessionState.totalDurationSeconds > 0
+      ? sessionState.totalDurationSeconds - totalRemaining
+      : 0;
+  const progress = sessionState.totalDurationSeconds
+    ? (completed / sessionState.totalDurationSeconds) * 100
+    : 0;
+  if (sessionProgressFill) {
+    sessionProgressFill.style.width = `${Math.min(progress, 100)}%`;
+  }
+  if (sessionStatus) {
+    sessionStatus.textContent = sessionState.isRunning
+      ? sessionState.isPaused
+        ? "Séance en pause"
+        : "Séance en cours"
+      : "Prêt à démarrer";
+  }
+  updateTimelineHighlight();
+};
+
+const resetSessionTimer = (timeline) => {
+  if (sessionState.timerId) {
+    window.clearInterval(sessionState.timerId);
+  }
+  sessionState.timerId = null;
+  sessionState.timeline = timeline;
+  sessionState.currentIndex = -1;
+  sessionState.phaseRemainingSeconds = 0;
+  sessionState.totalDurationSeconds = totalDurationSeconds(timeline);
+  sessionState.phaseStartMs = null;
+  sessionState.isRunning = false;
+  sessionState.isPaused = false;
+  updateSessionDisplay(sessionState.totalDurationSeconds);
+};
+
+const startSessionTimer = () => {
+  const timeline = buildTimeline();
+  if (!timeline.length) {
+    return;
+  }
+  sessionState.timeline = timeline;
+  sessionState.totalDurationSeconds = totalDurationSeconds(timeline);
+  sessionState.currentIndex = 0;
+  sessionState.phaseRemainingSeconds = timeline[0].durationSeconds;
+  sessionState.phaseStartMs = performance.now();
+  sessionState.isRunning = true;
+  sessionState.isPaused = false;
+  sessionPauseButton.textContent = "Pause";
+  updateSessionDisplay(sessionState.phaseRemainingSeconds);
+  updateSessionControls(true);
+  sessionState.timerId = window.setInterval(() => {
+    if (!sessionState.isRunning || sessionState.isPaused) {
+      return;
+    }
+    const now = performance.now();
+    const elapsedSeconds = (now - sessionState.phaseStartMs) / 1000;
+    const remaining = Math.max(
+      sessionState.phaseRemainingSeconds - elapsedSeconds,
+      0
+    );
+    if (remaining <= 0) {
+      const nextIndex = sessionState.currentIndex + 1;
+      if (nextIndex >= sessionState.timeline.length) {
+        sessionState.isRunning = false;
+        window.clearInterval(sessionState.timerId);
+        sessionState.timerId = null;
+        sessionState.currentIndex = sessionState.timeline.length - 1;
+        updateSessionDisplay(0);
+        updateSessionControls(true);
+        sessionPauseButton.textContent = "Pause";
+        return;
+      }
+      sessionState.currentIndex = nextIndex;
+      sessionState.phaseRemainingSeconds =
+        sessionState.timeline[nextIndex].durationSeconds;
+      sessionState.phaseStartMs = now;
+      updateSessionDisplay(sessionState.phaseRemainingSeconds);
+      return;
+    }
+    updateSessionDisplay(remaining);
+  }, 250);
+};
+
+const pauseSessionTimer = () => {
+  if (!sessionState.isRunning || sessionState.isPaused) {
+    return;
+  }
+  const now = performance.now();
+  const elapsedSeconds = (now - sessionState.phaseStartMs) / 1000;
+  sessionState.phaseRemainingSeconds = Math.max(
+    sessionState.phaseRemainingSeconds - elapsedSeconds,
+    0
+  );
+  sessionState.isPaused = true;
+  updateSessionDisplay(sessionState.phaseRemainingSeconds);
+  updateSessionControls(true);
+};
+
+const resumeSessionTimer = () => {
+  if (!sessionState.isRunning || !sessionState.isPaused) {
+    return;
+  }
+  sessionState.phaseStartMs = performance.now();
+  sessionState.isPaused = false;
+  updateSessionDisplay(sessionState.phaseRemainingSeconds);
+  updateSessionControls(true);
+};
+
+const updateSessionPreview = (isValid) => {
+  if (sessionState.isRunning) {
+    updateSessionControls(isValid);
+    return;
+  }
+  const timeline = buildTimeline();
+  renderTimeline(timeline);
+  resetSessionTimer(timeline);
+  updateSessionControls(isValid);
 };
 
 const timerState = {
@@ -440,6 +688,29 @@ addBlockButton.addEventListener("click", () => {
 });
 
 saveButton.addEventListener("click", saveSession);
+sessionStartButton.addEventListener("click", () => {
+  if (sessionState.isRunning) {
+    return;
+  }
+  startSessionTimer();
+});
+sessionPauseButton.addEventListener("click", () => {
+  if (!sessionState.isRunning) {
+    return;
+  }
+  if (sessionState.isPaused) {
+    resumeSessionTimer();
+  } else {
+    pauseSessionTimer();
+  }
+  sessionPauseButton.textContent = sessionState.isPaused ? "Reprendre" : "Pause";
+});
+sessionResetButton.addEventListener("click", () => {
+  const timeline = buildTimeline();
+  renderTimeline(timeline);
+  resetSessionTimer(timeline);
+  sessionPauseButton.textContent = "Pause";
+});
 timerStartButton.addEventListener("click", startTimer);
 timerStopButton.addEventListener("click", stopTimer);
 exportJsonButton.addEventListener("click", exportJson);
