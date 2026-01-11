@@ -69,6 +69,28 @@
       <div class="blocks" id="blocks-container"></div>
     </section>
 
+    <section class="panel" aria-labelledby="exercise-library-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="exercise-library-title">Exercices</h2>
+          <p>Ajoutez et gérez votre bibliothèque d'exercices par catégorie.</p>
+        </div>
+      </div>
+      <div class="form-grid">
+        <label>
+          Catégorie
+          <select id="exercise-category"></select>
+        </label>
+        <label>
+          Nom de l'exercice
+          <input type="text" id="exercise-name" placeholder="Ex : Crunch oblique" />
+          <span class="error" id="exercise-error"></span>
+        </label>
+        <button type="button" class="primary" id="add-exercise">Ajouter l'exercice</button>
+      </div>
+      <div class="exercise-library" id="exercise-list"></div>
+    </section>
+
     <section class="panel" aria-labelledby="cooldown-title">
       <div class="panel-header">
         <h2 id="cooldown-title">Récupération</h2>
@@ -189,12 +211,7 @@
       <div class="block-grid">
         <label>
           Sélection
-          <select data-field="type">
-            <option value="Vitesse">Vitesse</option>
-            <option value="Puissance">Puissance</option>
-            <option value="Endurance">Endurance</option>
-            <option value="Technique">Technique</option>
-          </select>
+          <select data-field="type"></select>
         </label>
         <label>
           Répétitions
