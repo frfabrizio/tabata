@@ -101,6 +101,49 @@
       <div class="library" id="library-list"></div>
     </section>
 
+    <section class="panel" aria-labelledby="session-timer-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="session-timer-title">Timer de séance</h2>
+          <p>Lancez la séance et suivez les phases en temps réel.</p>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="timer-actions">
+          <button type="button" id="session-start" class="primary">Démarrer</button>
+          <button type="button" id="session-pause" class="secondary" disabled>Pause</button>
+          <button type="button" id="session-reset" class="ghost">Réinitialiser</button>
+        </div>
+      </div>
+      <div class="session-timer">
+        <div class="session-metrics">
+          <div>
+            <span class="metric-label">Phase en cours</span>
+            <strong id="session-current">Prêt</strong>
+          </div>
+          <div>
+            <span class="metric-label">Suivante</span>
+            <strong id="session-next">—</strong>
+          </div>
+          <div>
+            <span class="metric-label">Temps restant</span>
+            <strong id="session-remaining">0:00</strong>
+          </div>
+          <div>
+            <span class="metric-label">Total restant</span>
+            <strong id="session-total-remaining">0:00</strong>
+          </div>
+        </div>
+        <div class="session-progress">
+          <div class="session-progress-bar">
+            <div class="session-progress-fill" id="session-progress-fill"></div>
+          </div>
+          <span class="session-status" id="session-status">Prêt à démarrer</span>
+        </div>
+        <ul class="session-timeline" id="session-timeline"></ul>
+      </div>
+    </section>
+
     <section class="panel" aria-labelledby="timer-instrumentation-title">
       <div class="panel-header">
         <div>
