@@ -81,6 +81,32 @@ h1 {
   gap: 16px;
 }
 
+.home-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.home-card {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #fdfdfd;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.home-card h3 {
+  margin: 0;
+}
+
+.home-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .panel-header {
   display: flex;
   flex-wrap: wrap;
