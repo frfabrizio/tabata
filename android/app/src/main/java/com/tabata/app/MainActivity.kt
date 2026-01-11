@@ -1,6 +1,8 @@
 package com.tabata.app
 
 import android.os.Bundle
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 import com.tabata.app.databinding.ActivityMainBinding
 
@@ -12,8 +14,16 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.startButton.setOnClickListener {
-            binding.statusText.text = getString(R.string.session_ready)
+        binding.tabataWebView.apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            webViewClient = WebViewClient()
+            loadUrl("file:///android_asset/index.html")
         }
+    }
+
+    override fun onDestroy() {
+        binding.tabataWebView.destroy()
+        super.onDestroy()
     }
 }

@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Éditeur de séance Tabata</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <div>
+        <p class="eyebrow">Édition de séance</p>
+        <h1>Créer une séance Tabata</h1>
+      </div>
+      <div class="total-duration" aria-live="polite">
+        <span>Durée totale</span>
+        <strong id="total-duration">0 min</strong>
+      </div>
+    </header>
+
+    <section class="panel home-panel" aria-labelledby="home-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="home-title">Accueil</h2>
+          <p>Choisissez votre prochaine séance.</p>
+        </div>
+      </div>
+      <div class="home-actions">
+        <div class="home-card">
+          <h3>Créer une séance</h3>
+          <p>Repartez de zéro pour configurer un nouvel entraînement.</p>
+          <button type="button" class="primary" id="home-create-session">
+            Nouvelle séance
+          </button>
+        </div>
+        <div class="home-card">
+          <h3>Utiliser une séance sauvegardée</h3>
+          <p>Rechargez rapidement une séance enregistrée dans votre bibliothèque.</p>
+          <button type="button" class="secondary" id="home-load-session">
+            Séance sauvegardée
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="warmup-title">
+      <div class="panel-header">
+        <h2 id="warmup-title">Échauffement</h2>
+        <p>Renseignez la durée avant l'entraînement.</p>
+      </div>
+      <div class="form-grid">
+        <label>
+          Durée (min)
+          <input type="number" min="1" value="5" id="warmup-duration" />
+          <span class="error" data-error-for="warmup-duration"></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="blocks-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="blocks-title">Blocs</h2>
+          <p>Sélectionnez un bloc, son nombre de répétitions et ajustez l'intervalle.</p>
+        </div>
+        <button type="button" class="secondary" id="add-block">+ Ajouter un bloc</button>
+      </div>
+      <div class="blocks" id="blocks-container"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="cooldown-title">
+      <div class="panel-header">
+        <h2 id="cooldown-title">Récupération</h2>
+        <p>Durée de retour au calme.</p>
+      </div>
+      <div class="form-grid">
+        <label>
+          Durée (min)
+          <input type="number" min="1" value="5" id="cooldown-duration" />
+          <span class="error" data-error-for="cooldown-duration"></span>
+        </label>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="library-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="library-title">Bibliothèque</h2>
+          <p>Enregistrez la séance pour la retrouver plus tard.</p>
+        </div>
+      </div>
+      <div class="form-grid">
+        <label>
+          Nom de la séance
+          <input type="text" id="session-name" placeholder="Ex : Tabata explosif" />
+        </label>
+        <button type="button" id="save-session" class="primary">Enregistrer la séance</button>
+        <span class="error" id="save-error"></span>
+      </div>
+      <div class="library" id="library-list"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="session-timer-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="session-timer-title">Timer de séance</h2>
+          <p>Lancez la séance et suivez les phases en temps réel.</p>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="timer-actions">
+          <button type="button" id="session-start" class="primary">Démarrer</button>
+          <button type="button" id="session-pause" class="secondary" disabled>Pause</button>
+          <button type="button" id="session-reset" class="ghost">Réinitialiser</button>
+        </div>
+      </div>
+      <div class="session-timer">
+        <div class="session-metrics">
+          <div>
+            <span class="metric-label">Phase en cours</span>
+            <strong id="session-current">Prêt</strong>
+          </div>
+          <div>
+            <span class="metric-label">Suivante</span>
+            <strong id="session-next">—</strong>
+          </div>
+          <div>
+            <span class="metric-label">Temps restant</span>
+            <strong id="session-remaining">0:00</strong>
+          </div>
+          <div>
+            <span class="metric-label">Total restant</span>
+            <strong id="session-total-remaining">0:00</strong>
+          </div>
+        </div>
+        <div class="session-progress">
+          <div class="session-progress-bar">
+            <div class="session-progress-fill" id="session-progress-fill"></div>
+          </div>
+          <span class="session-status" id="session-status">Prêt à démarrer</span>
+        </div>
+        <ul class="session-timeline" id="session-timeline"></ul>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="timer-instrumentation-title">
+      <div class="panel-header">
+        <div>
+          <h2 id="timer-instrumentation-title">Instrumentation du timer</h2>
+          <p>Suivi des ticks, transitions background/foreground et interruptions.</p>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="timer-actions">
+          <button type="button" id="timer-start" class="primary">Démarrer le timer</button>
+          <button type="button" id="timer-stop" class="secondary" disabled>Arrêter</button>
+        </div>
+        <div class="timer-actions">
+          <button type="button" id="export-json" class="secondary" disabled>Exporter JSON</button>
+          <button type="button" id="export-csv" class="secondary" disabled>Exporter CSV</button>
+        </div>
+      </div>
+      <div class="form-grid">
+        <label>
+          Interruption à consigner
+          <select id="interrupt-type">
+            <option value="appel">Appel entrant</option>
+            <option value="audio">Audio concurrent</option>
+            <option value="verrouillage">Verrouillage écran</option>
+          </select>
+        </label>
+        <button type="button" id="log-interrupt" class="ghost">Ajouter interruption</button>
+      </div>
+      <div class="timer-summary" id="timer-summary"></div>
+      <div class="timer-logs">
+        <h3>Logs</h3>
+        <ul id="timer-log-list"></ul>
+      </div>
+    </section>
+  </main>
+
+  <template id="block-template">
+    <div class="block-card">
+      <div class="block-header">
+        <h3>Bloc</h3>
+        <button type="button" class="ghost" data-action="remove">Supprimer</button>
+      </div>
+      <div class="block-grid">
+        <label>
+          Sélection
+          <select data-field="type">
+            <option value="Vitesse">Vitesse</option>
+            <option value="Puissance">Puissance</option>
+            <option value="Endurance">Endurance</option>
+            <option value="Technique">Technique</option>
+          </select>
+        </label>
+        <label>
+          Répétitions
+          <input type="number" min="1" value="4" data-field="reps" />
+          <span class="error" data-error-field="reps"></span>
+        </label>
+        <label>
+          Intervalle (min)
+          <input type="number" min="1" value="1" data-field="interval" />
+          <span class="error" data-error-field="interval"></span>
+        </label>
+        <label>
+          Ajustement d'intervalle (min)
+          <input type="number" min="0" value="0" data-field="adjustment" />
+        </label>
+      </div>
+      <div class="block-summary" data-summary></div>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
