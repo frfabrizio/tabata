@@ -16,6 +16,10 @@ const timerSummary = document.getElementById("timer-summary");
 const timerLogList = document.getElementById("timer-log-list");
 const interruptSelect = document.getElementById("interrupt-type");
 const interruptButton = document.getElementById("log-interrupt");
+const homeCreateButton = document.getElementById("home-create-session");
+const homeLoadButton = document.getElementById("home-load-session");
+const warmupSection = document.querySelector("[aria-labelledby='warmup-title']");
+const librarySection = document.querySelector("[aria-labelledby='library-title']");
 
 const STORAGE_KEY = "tabataSessions";
 const TIMER_EXPECTED_INTERVAL_MS = 1000;
@@ -145,6 +149,25 @@ const getSessions = () => {
 
 const clearBlocks = () => {
   blocksContainer.innerHTML = "";
+};
+
+const resetSession = () => {
+  const warmupDefault = warmupInput.getAttribute("value") ?? "5";
+  const cooldownDefault = cooldownInput.getAttribute("value") ?? "5";
+  warmupInput.value = warmupDefault;
+  cooldownInput.value = cooldownDefault;
+  sessionNameInput.value = "";
+  clearBlocks();
+  createBlock();
+  createBlock();
+  updateTotals();
+};
+
+const scrollToSection = (section) => {
+  if (!section) {
+    return;
+  }
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
 const applySession = (session) => {
@@ -442,3 +465,13 @@ updateTotals();
 loadLibrary();
 updateTimerSummary();
 setExportEnabled();
+
+homeCreateButton.addEventListener("click", () => {
+  resetSession();
+  scrollToSection(warmupSection);
+});
+
+homeLoadButton.addEventListener("click", () => {
+  loadLibrary();
+  scrollToSection(librarySection);
+});
