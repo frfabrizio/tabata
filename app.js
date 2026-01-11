@@ -27,12 +27,22 @@ const formatTimestamp = (timestamp) =>
   new Date(timestamp).toLocaleTimeString("fr-FR", { hour12: false });
 const formatMs = (value) => `${value.toFixed(1)} ms`;
 
-const createBlock = () => {
+const createBlock = (data = {}) => {
   const fragment = blockTemplate.content.cloneNode(true);
   const block = fragment.querySelector(".block-card");
   const removeButton = fragment.querySelector("[data-action='remove']");
 
   const inputs = block.querySelectorAll("input, select");
+  const typeInput = block.querySelector("[data-field='type']");
+  const repsInput = block.querySelector("[data-field='reps']");
+  const intervalInput = block.querySelector("[data-field='interval']");
+  const adjustmentInput = block.querySelector("[data-field='adjustment']");
+
+  typeInput.value = data.type ?? typeInput.value;
+  repsInput.value = data.reps ?? repsInput.value;
+  intervalInput.value = data.interval ?? intervalInput.value;
+  adjustmentInput.value = data.adjustment ?? adjustmentInput.value;
+
   inputs.forEach((input) => {
     input.addEventListener("input", updateTotals);
   });
@@ -43,6 +53,7 @@ const createBlock = () => {
   });
 
   blocksContainer.appendChild(fragment);
+  return block;
 };
 
 const getBlocksData = () => {
@@ -124,8 +135,50 @@ const updateTotals = () => {
   saveButton.disabled = !isValid || blocks.length === 0;
 };
 
+const saveSessions = (sessions) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+};
+
+const getSessions = () => {
+  return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+};
+
+const clearBlocks = () => {
+  blocksContainer.innerHTML = "";
+};
+
+const applySession = (session) => {
+  warmupInput.value = session.warmup ?? warmupInput.value;
+  cooldownInput.value = session.cooldown ?? cooldownInput.value;
+  sessionNameInput.value = session.name ?? sessionNameInput.value;
+
+  clearBlocks();
+  if (session.blocksDetails && session.blocksDetails.length) {
+    session.blocksDetails.forEach((block) => createBlock(block));
+  } else {
+    createBlock();
+    createBlock();
+  }
+  updateTotals();
+};
+
+const renderBlocksDetails = (blocks) => {
+  if (!blocks || !blocks.length) {
+    return "<p class=\"muted\">Détails de blocs indisponibles.</p>";
+  }
+  const items = blocks
+    .map((block) => {
+      const intervalTotal = Math.max(block.interval + block.adjustment, 0);
+      return `<li>${block.type} · ${block.reps} x ${intervalTotal.toFixed(
+        1
+      )} min</li>`;
+    })
+    .join("");
+  return `<ul class="library-blocks">${items}</ul>`;
+};
+
 const loadLibrary = () => {
-  const sessions = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  const sessions = getSessions();
   libraryList.innerHTML = "";
 
   if (!sessions.length) {
@@ -134,13 +187,30 @@ const loadLibrary = () => {
   }
 
   sessions.forEach((session) => {
+    const sessionId = session.id ?? session.createdAt ?? session.name;
     const card = document.createElement("div");
     card.className = "library-card";
     card.innerHTML = `
       <h4>${session.name}</h4>
       <p>${session.total} min · ${session.blocks} blocs</p>
       <p>Échauffement ${session.warmup} min · Récupération ${session.cooldown} min</p>
+      ${renderBlocksDetails(session.blocksDetails)}
+      <div class="library-actions">
+        <button type="button" class="secondary" data-action="load">Charger</button>
+        <button type="button" class="ghost" data-action="delete">Supprimer</button>
+      </div>
     `;
+    card.querySelector("[data-action='load']").addEventListener("click", () => {
+      applySession(session);
+    });
+    card.querySelector("[data-action='delete']").addEventListener("click", () => {
+      const remaining = getSessions().filter((item) => {
+        const itemId = item.id ?? item.createdAt ?? item.name;
+        return itemId !== sessionId;
+      });
+      saveSessions(remaining);
+      loadLibrary();
+    });
     libraryList.appendChild(card);
   });
 };
@@ -155,16 +225,23 @@ const saveSession = () => {
 
   const blocks = getBlocksData();
   const total = totalDurationEl.textContent.replace(" min", "");
-  const sessions = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  const sessions = getSessions();
   sessions.unshift({
+    id: window.crypto?.randomUUID?.() ?? `${Date.now()}`,
     name,
     total,
     blocks: blocks.length,
     warmup: toNumber(warmupInput.value),
     cooldown: toNumber(cooldownInput.value),
+    blocksDetails: blocks.map((block) => ({
+      type: block.type,
+      reps: block.reps,
+      interval: block.interval,
+      adjustment: block.adjustment,
+    })),
     createdAt: new Date().toISOString(),
   });
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions.slice(0, 8)));
+  saveSessions(sessions.slice(0, 8));
   sessionNameInput.value = "";
   loadLibrary();
 };
