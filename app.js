@@ -35,9 +35,17 @@ const exerciseNameInput = document.getElementById("exercise-name");
 const exerciseError = document.getElementById("exercise-error");
 const addExerciseButton = document.getElementById("add-exercise");
 const exerciseList = document.getElementById("exercise-list");
+const statsRangeGroup = document.getElementById("stats-range");
+const statsViewGroup = document.getElementById("stats-view");
+const statsRangeLabel = document.getElementById("stats-range-label");
+const statsSessionCount = document.getElementById("stats-session-count");
+const statsExerciseList = document.getElementById("stats-exercise-list");
+const statsCategoryList = document.getElementById("stats-category-list");
+const statsEmpty = document.getElementById("stats-empty");
 
 const STORAGE_KEY = "tabataSessions";
 const EXERCISE_STORAGE_KEY = "tabataExercises";
+const TRAINING_HISTORY_KEY = "tabataTrainingHistory";
 const TIMER_EXPECTED_INTERVAL_MS = 1000;
 
 const DEFAULT_EXERCISE_CATEGORIES = [
@@ -190,6 +198,19 @@ const getExercises = () => {
     saveExercises(defaults);
     return defaults;
   }
+};
+
+const getTrainingHistory = () => {
+  return JSON.parse(localStorage.getItem(TRAINING_HISTORY_KEY) || "[]");
+};
+
+const saveTrainingHistory = (history) => {
+  localStorage.setItem(TRAINING_HISTORY_KEY, JSON.stringify(history));
+};
+
+const statsState = {
+  range: "week",
+  view: "raw",
 };
 
 const groupExercisesByCategory = (exercises) => {
@@ -699,6 +720,8 @@ const startSessionTimer = () => {
         window.clearInterval(sessionState.timerId);
         sessionState.timerId = null;
         sessionState.currentIndex = sessionState.timeline.length - 1;
+        recordTrainingSession();
+        renderTrainingStats();
         updateSessionDisplay(0);
         updateSessionControls(true);
         sessionPauseButton.textContent = "Pause";
@@ -749,6 +772,153 @@ const updateSessionPreview = (isValid) => {
   renderTimeline(timeline);
   resetSessionTimer(timeline);
   updateSessionControls(isValid);
+};
+
+const buildExerciseCategoryMap = () => {
+  return getExercises().reduce((acc, exercise) => {
+    acc.set(exercise.name.toLowerCase(), exercise.category);
+    return acc;
+  }, new Map());
+};
+
+const recordTrainingSession = () => {
+  const blocks = getBlocksData();
+  if (!blocks.length) {
+    return;
+  }
+  const categoryMap = buildExerciseCategoryMap();
+  const exerciseCounts = {};
+  const categoryCounts = {};
+  let totalReps = 0;
+
+  blocks.forEach((block) => {
+    const name = block.type.trim();
+    const reps = Math.max(block.reps, 0);
+    if (!name || reps === 0) {
+      return;
+    }
+    exerciseCounts[name] = (exerciseCounts[name] || 0) + reps;
+    const category = categoryMap.get(name.toLowerCase()) ?? "Autres";
+    categoryCounts[category] = (categoryCounts[category] || 0) + reps;
+    totalReps += reps;
+  });
+
+  if (!totalReps) {
+    return;
+  }
+
+  const history = getTrainingHistory();
+  history.unshift({
+    id: window.crypto?.randomUUID?.() ?? `${Date.now()}`,
+    completedAt: new Date().toISOString(),
+    totalReps,
+    exercises: exerciseCounts,
+    categories: categoryCounts,
+  });
+  saveTrainingHistory(history.slice(0, 200));
+};
+
+const getStatsRangeConfig = (range) => {
+  const configs = {
+    week: { label: "7 jours glissants", days: 7 },
+    month: { label: "30 jours glissants", days: 30 },
+    year: { label: "365 jours glissants", days: 365 },
+  };
+  return configs[range] ?? configs.week;
+};
+
+const filterHistoryByRange = (history, range) => {
+  const { days } = getStatsRangeConfig(range);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return history.filter((entry) => new Date(entry.completedAt) >= cutoff);
+};
+
+const aggregateCounts = (entries, field) => {
+  return entries.reduce((acc, entry) => {
+    const counts = entry[field] || {};
+    Object.entries(counts).forEach(([label, count]) => {
+      acc[label] = (acc[label] || 0) + count;
+    });
+    return acc;
+  }, {});
+};
+
+const renderStatsList = (listEl, items, view) => {
+  if (!listEl) {
+    return;
+  }
+  listEl.innerHTML = "";
+  if (!items.length) {
+    const emptyItem = document.createElement("li");
+    emptyItem.className = "muted";
+    emptyItem.textContent = "Aucune donnée disponible.";
+    listEl.appendChild(emptyItem);
+    return;
+  }
+  const max = Math.max(...items.map((item) => item.count), 1);
+  items.forEach((item) => {
+    const li = document.createElement("li");
+    if (view === "chart") {
+      li.innerHTML = `
+        <div class="stats-row">
+          <span>${item.label}</span>
+          <strong>${item.count}</strong>
+        </div>
+        <div class="stats-bar-track">
+          <div class="stats-bar-fill" style="width: ${Math.round(
+            (item.count / max) * 100
+          )}%"></div>
+        </div>
+      `;
+    } else {
+      li.innerHTML = `
+        <div class="stats-row">
+          <span>${item.label}</span>
+          <strong>${item.count}</strong>
+        </div>
+      `;
+    }
+    listEl.appendChild(li);
+  });
+};
+
+const renderTrainingStats = () => {
+  if (!statsSessionCount || !statsRangeLabel) {
+    return;
+  }
+  const history = getTrainingHistory();
+  const rangeConfig = getStatsRangeConfig(statsState.range);
+  const entries = filterHistoryByRange(history, statsState.range);
+  const exercises = aggregateCounts(entries, "exercises");
+  const categories = aggregateCounts(entries, "categories");
+  const sortedExercises = Object.entries(exercises)
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+  const sortedCategories = Object.entries(categories)
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  statsRangeLabel.textContent = `Période : ${rangeConfig.label}.`;
+  statsSessionCount.textContent = `${entries.length}`;
+  renderStatsList(statsExerciseList, sortedExercises, statsState.view);
+  renderStatsList(statsCategoryList, sortedCategories, statsState.view);
+  if (statsEmpty) {
+    statsEmpty.hidden = entries.length > 0;
+  }
+};
+
+const setSegmentedState = (group, selectedValue, dataKey) => {
+  if (!group) {
+    return;
+  }
+  group.querySelectorAll("button").forEach((button) => {
+    const matches = button.dataset[dataKey] === selectedValue;
+    button.classList.toggle("active", matches);
+    button.setAttribute("aria-pressed", matches ? "true" : "false");
+  });
 };
 
 const timerState = {
@@ -953,6 +1123,30 @@ interruptButton.addEventListener("click", () => {
   logInterrupt(interruptSelect.value);
 });
 
+if (statsRangeGroup) {
+  statsRangeGroup.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-range]");
+    if (!button) {
+      return;
+    }
+    statsState.range = button.dataset.range;
+    setSegmentedState(statsRangeGroup, statsState.range, "range");
+    renderTrainingStats();
+  });
+}
+
+if (statsViewGroup) {
+  statsViewGroup.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-view]");
+    if (!button) {
+      return;
+    }
+    statsState.view = button.dataset.view;
+    setSegmentedState(statsViewGroup, statsState.view, "view");
+    renderTrainingStats();
+  });
+}
+
 if (addExerciseButton) {
   addExerciseButton.addEventListener("click", () => {
     const name = exerciseNameInput.value.trim();
@@ -1000,6 +1194,9 @@ renderExerciseLibrary();
 refreshExerciseSelects();
 updateTimerSummary();
 setExportEnabled();
+setSegmentedState(statsRangeGroup, statsState.range, "range");
+setSegmentedState(statsViewGroup, statsState.view, "view");
+renderTrainingStats();
 
 homeCreateButton.addEventListener("click", () => {
   resetSession();
