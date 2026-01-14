@@ -38,6 +38,54 @@ body {
   gap: 16px;
 }
 
+.primary-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: var(--panel);
+  border-radius: 999px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  align-items: center;
+  justify-content: center;
+}
+
+.primary-nav a {
+  text-decoration: none;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.primary-nav a:hover,
+.primary-nav a:focus-visible {
+  color: var(--primary);
+  background: rgba(47, 111, 237, 0.12);
+  outline: none;
+}
+
+.section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.section-group-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -113,6 +161,11 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 20px;
 }
 
 .panel-header p {
