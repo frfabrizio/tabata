@@ -35,9 +35,12 @@ const exerciseNameInput = document.getElementById("exercise-name");
 const exerciseError = document.getElementById("exercise-error");
 const addExerciseButton = document.getElementById("add-exercise");
 const exerciseList = document.getElementById("exercise-list");
+const historyList = document.getElementById("history-list");
+const historyDetail = document.getElementById("history-detail");
 
 const STORAGE_KEY = "tabataSessions";
 const EXERCISE_STORAGE_KEY = "tabataExercises";
+const HISTORY_STORAGE_KEY = "tabataSessionHistory";
 const TIMER_EXPECTED_INTERVAL_MS = 1000;
 
 const DEFAULT_EXERCISE_CATEGORIES = [
@@ -159,6 +162,11 @@ const formatClock = (seconds) => {
   const remainingSeconds = Math.floor(seconds % 60);
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 };
+const formatDateTime = (timestamp) =>
+  new Date(timestamp).toLocaleString("fr-FR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 
 const buildDefaultExercises = () =>
   DEFAULT_EXERCISE_CATEGORIES.flatMap((group) =>
@@ -397,6 +405,14 @@ const getSessions = () => {
   return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
 };
 
+const saveHistory = (entries) => {
+  localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(entries));
+};
+
+const getHistory = () => {
+  return JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || "[]");
+};
+
 const clearBlocks = () => {
   blocksContainer.innerHTML = "";
 };
@@ -448,6 +464,236 @@ const renderBlocksDetails = (blocks) => {
     })
     .join("");
   return `<ul class="library-blocks">${items}</ul>`;
+};
+
+const renderHistoryBlocks = (blocks) => {
+  if (!blocks || !blocks.length) {
+    return "<p class=\"muted\">Aucun bloc renseigné.</p>";
+  }
+  const items = blocks
+    .map((block) => {
+      const intervalTotal = Math.max(block.interval + block.adjustment, 0);
+      return `<li>${block.type} · ${block.reps} x ${intervalTotal.toFixed(
+        1
+      )} min</li>`;
+    })
+    .join("");
+  return `<ul class="history-blocks">${items}</ul>`;
+};
+
+const renderHistoryTimeline = (timeline) => {
+  if (!timeline || !timeline.length) {
+    return "<p class=\"muted\">Aucune phase enregistrée.</p>";
+  }
+  const items = timeline
+    .map(
+      (item) =>
+        `<li><span>${item.label}</span><span>${formatClock(
+          item.durationSeconds
+        )}</span></li>`
+    )
+    .join("");
+  return `<ul class="history-timeline">${items}</ul>`;
+};
+
+const getHistoryTotals = (entries) =>
+  entries.map((entry) => ({
+    ...entry,
+    totalMinutesValue: Number.parseFloat(entry.totalMinutes || 0),
+  }));
+
+const formatDelta = (value) => {
+  if (!Number.isFinite(value)) {
+    return "—";
+  }
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(1)} min`;
+};
+
+const computeHistoryStats = (entries, entry) => {
+  const normalized = getHistoryTotals(entries);
+  const totalSessions = normalized.length;
+  const totalMinutes = normalized.reduce(
+    (sum, item) => sum + item.totalMinutesValue,
+    0
+  );
+  const averageMinutes = totalSessions ? totalMinutes / totalSessions : 0;
+  const averageBlocks = totalSessions
+    ? normalized.reduce((sum, item) => sum + item.blocks, 0) / totalSessions
+    : 0;
+  const totalPhases = entry.timeline?.length ?? 0;
+  const averagePhaseSeconds = totalPhases
+    ? entry.timeline.reduce((sum, item) => sum + item.durationSeconds, 0) /
+      totalPhases
+    : 0;
+
+  const entryMinutes = Number.parseFloat(entry.totalMinutes || 0);
+  const deltaMinutes = entryMinutes - averageMinutes;
+  const deltaBlocks = entry.blocks - averageBlocks;
+
+  const now = Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const recentEntries = normalized.filter((item) => {
+    const completedAt = Date.parse(item.completedAt);
+    return Number.isFinite(completedAt) && now - completedAt <= sevenDaysMs;
+  });
+  const recentTotal = recentEntries.reduce(
+    (sum, item) => sum + item.totalMinutesValue,
+    0
+  );
+  const recentAverage = recentEntries.length
+    ? recentTotal / recentEntries.length
+    : 0;
+
+  return {
+    totalSessions,
+    averageMinutes,
+    averageBlocks,
+    totalPhases,
+    averagePhaseSeconds,
+    deltaMinutes,
+    deltaBlocks,
+    recentCount: recentEntries.length,
+    recentAverage,
+  };
+};
+
+const renderHistoryStats = (stats) => `
+  <div class="history-stats">
+    <div>
+      <span class="metric-label">Phases totales</span>
+      <strong>${stats.totalPhases}</strong>
+    </div>
+    <div>
+      <span class="metric-label">Durée phase moyenne</span>
+      <strong>${formatClock(stats.averagePhaseSeconds)}</strong>
+    </div>
+    <div>
+      <span class="metric-label">Moyenne globale</span>
+      <strong>${stats.averageMinutes.toFixed(1)} min</strong>
+    </div>
+    <div>
+      <span class="metric-label">Moyenne blocs</span>
+      <strong>${stats.averageBlocks.toFixed(1)}</strong>
+    </div>
+  </div>
+`;
+
+const renderHistoryTrends = (stats) => `
+  <div class="history-trends">
+    <div>
+      <span class="metric-label">Écart vs moyenne</span>
+      <strong>${formatDelta(stats.deltaMinutes)}</strong>
+    </div>
+    <div>
+      <span class="metric-label">Écart blocs</span>
+      <strong>${stats.deltaBlocks.toFixed(1)}</strong>
+    </div>
+    <div>
+      <span class="metric-label">Séances 7 derniers jours</span>
+      <strong>${stats.recentCount}</strong>
+    </div>
+    <div>
+      <span class="metric-label">Durée moy. récente</span>
+      <strong>${stats.recentAverage.toFixed(1)} min</strong>
+    </div>
+  </div>
+`;
+
+let selectedHistoryId = null;
+
+const renderHistoryDetail = (entry) => {
+  if (!historyDetail) {
+    return;
+  }
+  if (!entry) {
+    historyDetail.innerHTML =
+      "<p class=\"muted\">Sélectionnez une séance pour en voir le détail.</p>";
+    return;
+  }
+  const stats = computeHistoryStats(getHistory(), entry);
+  historyDetail.innerHTML = `
+    <div>
+      <h3>${entry.name}</h3>
+      <p>Terminée le ${formatDateTime(entry.completedAt)} · ${
+        entry.totalMinutes
+      } min</p>
+      <p>Échauffement ${entry.warmup} min · Récupération ${
+        entry.cooldown
+      } min · ${entry.blocks} blocs</p>
+    </div>
+    <div>
+      <strong class="metric-label">Statistiques de séance</strong>
+      ${renderHistoryStats(stats)}
+    </div>
+    <div>
+      <strong class="metric-label">Tendances par rapport à l'historique</strong>
+      ${renderHistoryTrends(stats)}
+    </div>
+    <div>
+      <strong class="metric-label">Blocs</strong>
+      ${renderHistoryBlocks(entry.blocksDetails)}
+    </div>
+    <div>
+      <strong class="metric-label">Phases</strong>
+      ${renderHistoryTimeline(entry.timeline)}
+    </div>
+  `;
+};
+
+const renderHistory = () => {
+  if (!historyList) {
+    return;
+  }
+  const entries = getHistory();
+  historyList.innerHTML = "";
+
+  if (!entries.length) {
+    historyList.innerHTML = "<p class=\"muted\">Aucune séance terminée.</p>";
+    selectedHistoryId = null;
+    renderHistoryDetail(null);
+    return;
+  }
+
+  if (!selectedHistoryId) {
+    selectedHistoryId = entries[0].id;
+  }
+
+  entries.forEach((entry) => {
+    const card = document.createElement("div");
+    card.className = "history-card";
+    if (entry.id === selectedHistoryId) {
+      card.classList.add("active");
+    }
+    card.innerHTML = `
+      <h4>${entry.name}</h4>
+      <p>${formatDateTime(entry.completedAt)}</p>
+      <p>${entry.totalMinutes} min · ${entry.blocks} blocs</p>
+      <div class="history-actions">
+        <button type="button" class="secondary" data-action="view">Voir détails</button>
+        <button type="button" class="ghost" data-action="delete">Supprimer</button>
+      </div>
+    `;
+    card.querySelector("[data-action='view']").addEventListener("click", () => {
+      selectedHistoryId = entry.id;
+      renderHistoryDetail(entry);
+      renderHistory();
+    });
+    card
+      .querySelector("[data-action='delete']")
+      .addEventListener("click", () => {
+        const remaining = getHistory().filter((item) => item.id !== entry.id);
+        saveHistory(remaining);
+        if (selectedHistoryId === entry.id) {
+          selectedHistoryId = remaining[0]?.id ?? null;
+        }
+        renderHistory();
+      });
+    historyList.appendChild(card);
+  });
+
+  const selectedEntry = entries.find((entry) => entry.id === selectedHistoryId);
+  renderHistoryDetail(selectedEntry ?? entries[0]);
 };
 
 const loadLibrary = () => {
@@ -528,6 +774,7 @@ const sessionState = {
   timerId: null,
   isRunning: false,
   isPaused: false,
+  currentSnapshot: null,
 };
 
 const buildTimeline = () => {
@@ -664,7 +911,43 @@ const resetSessionTimer = (timeline) => {
   sessionState.phaseStartMs = null;
   sessionState.isRunning = false;
   sessionState.isPaused = false;
+  sessionState.currentSnapshot = null;
   updateSessionDisplay(sessionState.totalDurationSeconds);
+};
+
+const buildHistorySnapshot = (timeline) => {
+  const blocks = getBlocksData();
+  const totalMinutes = (totalDurationSeconds(timeline) / 60).toFixed(1);
+  return {
+    id: window.crypto?.randomUUID?.() ?? `${Date.now()}`,
+    name: sessionNameInput.value.trim() || "Séance sans nom",
+    warmup: toNumber(warmupInput.value),
+    cooldown: toNumber(cooldownInput.value),
+    blocks: blocks.length,
+    blocksDetails: blocks.map((block) => ({
+      type: block.type,
+      reps: block.reps,
+      interval: block.interval,
+      adjustment: block.adjustment,
+    })),
+    timeline,
+    totalMinutes,
+    startedAt: new Date().toISOString(),
+  };
+};
+
+const completeHistoryEntry = () => {
+  if (!sessionState.currentSnapshot) {
+    return;
+  }
+  const entries = getHistory();
+  entries.unshift({
+    ...sessionState.currentSnapshot,
+    completedAt: new Date().toISOString(),
+  });
+  saveHistory(entries.slice(0, 12));
+  sessionState.currentSnapshot = null;
+  renderHistory();
 };
 
 const startSessionTimer = () => {
@@ -672,6 +955,7 @@ const startSessionTimer = () => {
   if (!timeline.length) {
     return;
   }
+  sessionState.currentSnapshot = buildHistorySnapshot(timeline);
   sessionState.timeline = timeline;
   sessionState.totalDurationSeconds = totalDurationSeconds(timeline);
   sessionState.currentIndex = 0;
@@ -702,6 +986,7 @@ const startSessionTimer = () => {
         updateSessionDisplay(0);
         updateSessionControls(true);
         sessionPauseButton.textContent = "Pause";
+        completeHistoryEntry();
         return;
       }
       sessionState.currentIndex = nextIndex;
@@ -995,6 +1280,7 @@ createBlock();
 createBlock();
 updateTotals();
 loadLibrary();
+renderHistory();
 renderExerciseCategoryOptions();
 renderExerciseLibrary();
 refreshExerciseSelects();
